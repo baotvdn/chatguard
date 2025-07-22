@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Klaw Chatbot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            max-height: calc(100vh - 200px);
+        }
+        
+        .message {
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+        
+        .user-message {
+            background: #3498db;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .assistant-message {
+            background: #ecf0f1;
+            color: #2c3e50;
+            margin-right: auto;
+        }
+        
+        .input-form {
+            padding: 1rem;
+            border-top: 1px solid #ddd;
+            background: white;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        
+        .btn {
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+        
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+        
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+        
+        .messages::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        .messages::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            color: #7f8c8d;
+            margin-top: 2rem;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .alert {
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+        }
+        
+        .alert.error {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .alert.info {
+            background: #3498db;
+            color: white;
+        }
+        
+        .alert.success {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .alert.warning {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 1rem;
+            color: #7f8c8d;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 Klaw Chatbot</h1>
+        <p>Powered by LangGraph & Claude</p>
+    </div>
+    
+    <div class="chat-container">
+        <div class="messages" id="messages">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert {{ message.tags|default:'info' }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+            
+            {% if conversation %}
+                {% for msg in conversation %}
+                    <div class="message {% if msg.role == 'user' %}user-message{% else %}assistant-message{% endif %}">
+                        {{ msg.content|linebreaks }}
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <h3>Welcome to Klaw Chatbot!</h3>
+                    <p>Start a conversation by typing a message below.</p>
+                </div>
+            {% endif %}
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                Claude is thinking...
+            </div>
+        </div>
+        
+        <form class="input-form" method="post" id="chatForm">
+            {% csrf_token %}
+            <div class="controls">
+                <h3>Chat with Claude</h3>
+                <a href="{% url 'clear_chat' %}" class="btn btn-secondary">Clear Chat</a>
+            </div>
+            <div class="input-group">
+                <input 
+                    type="text" 
+                    name="message" 
+                    id="messageInput"
+                    class="message-input" 
+                    placeholder="Type your message here..." 
+                    required
+                    autofocus
+                >
+                <button type="submit" id="sendButton" class="btn btn-primary">Send</button>
+            </div>
+        </form>
+    </div>
+    
+    <script>
+        // Auto-scroll to bottom when new messages are added
+        function scrollToBottom() {
+            const messages = document.getElementById('messages');
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            scrollToBottom();
+            
+            const form = document.getElementById('chatForm');
+            const input = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            const loading = document.getElementById('loading');
+            
+            // Show loading indicator on form submit
+            form.addEventListener('submit', function(e) {
+                const messageValue = input.value.trim();
+                if (messageValue) {
+                    // Show loading indicator
+                    loading.style.display = 'block';
+                    scrollToBottom();
+                    
+                    // Don't disable the input until after form submission
+                    sendButton.disabled = true;
+                    sendButton.textContent = 'Sending...';
+                    
+                    // The form will submit normally and the page will reload with the response
+                } else {
+                    // Prevent form submission if message is empty
+                    e.preventDefault();
+                }
+            });
+            
+            // Focus input after form submission
+            if (window.location.hash === '#sent') {
+                input.focus();
+                window.history.replaceState(null, null, window.location.pathname);
+            }
+        });
+    </script>
+</body>
+</html>

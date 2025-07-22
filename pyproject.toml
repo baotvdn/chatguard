@@ -5,9 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "django>=5.2.4",
     "langchain[anthropic]>=0.3.26",
     "langgraph>=0.5.4",
     "langsmith>=0.4.8",
+    "python-dotenv>=1.1.1",
 ]
 
 [dependency-groups]
