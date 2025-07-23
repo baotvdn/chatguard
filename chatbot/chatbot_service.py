@@ -37,6 +37,17 @@ class ChatbotService:
             return result["messages"][-1].content
         except Exception as e:
             return f"Error: {str(e)}"
+    
+    def stream_response(self, user_message: str):
+        """Stream a response from the chatbot for a user message."""
+        try:
+            # Stream directly from the LLM instead of through the graph
+            messages = [{"role": "user", "content": user_message}]
+            for chunk in self.llm.stream(messages):
+                if hasattr(chunk, 'content') and chunk.content:
+                    yield chunk.content
+        except Exception as e:
+            yield f"Error: {str(e)}"
 
 
 # Global chatbot instance (initialized once)

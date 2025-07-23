@@ -206,14 +206,14 @@
                 {% endfor %}
             {% endif %}
             
-            {% if conversation %}
-                {% for msg in conversation %}
-                    <div class="message {% if msg.role == 'user' %}user-message{% else %}assistant-message{% endif %}">
-                        {{ msg.content|linebreaks }}
-                    </div>
-                {% endfor %}
-            {% else %}
-                <div class="empty-state">
+            {% for msg in conversation %}
+                <div class="message {% if msg.role == 'user' %}user-message{% else %}assistant-message{% endif %}">
+                    {{ msg.content|linebreaks }}
+                </div>
+            {% endfor %}
+            
+            {% if not conversation %}
+                <div class="empty-state" id="emptyState">
                     <h3>Welcome to Klaw Chatbot!</h3>
                     <p>Start a conversation by typing a message below.</p>
                 </div>
@@ -253,38 +253,120 @@
             messages.scrollTop = messages.scrollHeight;
         }
         
+        // Add a message to the chat
+        function addMessage(content, role) {
+            const messages = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role === 'user' ? 'user-message' : 'assistant-message'}`;
+            messageDiv.innerHTML = content.replace(/\n/g, '<br>');
+            messages.appendChild(messageDiv);
+            scrollToBottom();
+            return messageDiv;
+        }
+        
+        // Stream chat response
+        function streamChat(userMessage) {
+            const loading = document.getElementById('loading');
+            const sendButton = document.getElementById('sendButton');
+            const input = document.getElementById('messageInput');
+            
+            // Hide empty state and add user message to chat
+            const emptyState = document.getElementById('emptyState');
+            if (emptyState) {
+                emptyState.style.display = 'none';
+            }
+            addMessage(userMessage, 'user');
+            
+            // Disable form without showing loading indicator
+            sendButton.disabled = true;
+            sendButton.textContent = 'Streaming...';
+            scrollToBottom();
+            
+            // Create assistant message container
+            const assistantMessage = addMessage('', 'assistant');
+            
+            // Set up EventSource for streaming
+            const formData = new FormData();
+            formData.append('message', userMessage);
+            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+            
+            fetch('{% url "stream_chat" %}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                function readStream() {
+                    return reader.read().then(({ done, value }) => {
+                        if (done) {
+                            // Hide loading and re-enable form
+                            loading.style.display = 'none';
+                            sendButton.disabled = false;
+                            sendButton.textContent = 'Send';
+                            input.focus();
+                            return;
+                        }
+                        
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); // Keep incomplete line in buffer
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+                                    if (data.chunk) {
+                                        assistantMessage.innerHTML += data.chunk.replace(/\n/g, '<br>');
+                                        scrollToBottom();
+                                    } else if (data.complete) {
+                                        // Stream complete, just re-enable form
+                                        sendButton.disabled = false;
+                                        sendButton.textContent = 'Send';
+                                        input.focus();
+                                        return;
+                                    }
+                                } catch (e) {
+                                    console.error('Error parsing streaming data:', e);
+                                }
+                            }
+                        }
+                        
+                        return readStream();
+                    });
+                }
+                
+                return readStream();
+            })
+            .catch(error => {
+                console.error('Error streaming chat:', error);
+                assistantMessage.innerHTML = 'Error: Failed to get response';
+                sendButton.disabled = false;
+                sendButton.textContent = 'Send';
+            });
+        }
+        
         document.addEventListener('DOMContentLoaded', function() {
             scrollToBottom();
             
             const form = document.getElementById('chatForm');
             const input = document.getElementById('messageInput');
-            const sendButton = document.getElementById('sendButton');
-            const loading = document.getElementById('loading');
             
-            // Show loading indicator on form submit
+            // Handle form submission with streaming
             form.addEventListener('submit', function(e) {
+                e.preventDefault(); // Always prevent default form submission
+                
                 const messageValue = input.value.trim();
                 if (messageValue) {
-                    // Show loading indicator
-                    loading.style.display = 'block';
-                    scrollToBottom();
-                    
-                    // Don't disable the input until after form submission
-                    sendButton.disabled = true;
-                    sendButton.textContent = 'Sending...';
-                    
-                    // The form will submit normally and the page will reload with the response
-                } else {
-                    // Prevent form submission if message is empty
-                    e.preventDefault();
+                    streamChat(messageValue);
+                    input.value = ''; // Clear input
                 }
             });
             
-            // Focus input after form submission
-            if (window.location.hash === '#sent') {
-                input.focus();
-                window.history.replaceState(null, null, window.location.pathname);
-            }
+            // Focus input on page load
+            input.focus();
         });
     </script>
 </body>

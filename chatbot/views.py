@@ -1,5 +1,7 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
+from django.http import StreamingHttpResponse
+import json
 from .chatbot_service import get_chatbot
 
 
@@ -47,3 +49,50 @@ def clear_chat(request):
     """Clear the conversation history."""
     request.session['conversation'] = []
     return redirect('chatbot_page')
+
+
+def stream_chat(request):
+    """Stream chatbot response."""
+    if request.method != 'POST':
+        return StreamingHttpResponse(
+            json.dumps({"error": "Only POST method allowed"}),
+            content_type='application/json'
+        )
+    
+    user_message = request.POST.get('message', '').strip()
+    if not user_message:
+        return StreamingHttpResponse(
+            json.dumps({"error": "Message is required"}),
+            content_type='application/json'
+        )
+    
+    # Add user message to conversation
+    conversation = request.session.get('conversation', [])
+    conversation.append({
+        'role': 'user', 
+        'content': user_message
+    })
+    
+    def generate():
+        chatbot = get_chatbot()
+        full_response = ""
+        
+        # Stream the response
+        for chunk in chatbot.stream_response(user_message):
+            full_response += chunk
+            yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+        
+        # Add complete response to conversation and save to session
+        conversation.append({
+            'role': 'assistant', 
+            'content': full_response
+        })
+        request.session['conversation'] = conversation
+        request.session.save()
+        
+        # Send completion signal
+        yield f"data: {json.dumps({'complete': True, 'full_response': full_response})}\n\n"
+    
+    response = StreamingHttpResponse(generate(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    return response
