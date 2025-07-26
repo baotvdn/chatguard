@@ -4,6 +4,7 @@ from langchain.chat_models import init_chat_model
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
+from .models import Conversation, Message
 
 
 class State(TypedDict):
@@ -30,11 +31,39 @@ class ChatbotService:
     def _chatbot_node(self, state: State):
         return {"messages": [self.llm.invoke(state["messages"])]}
     
-    def get_response(self, user_message: str) -> str:
+    def get_response(self, user_message: str, user) -> str:
         """Get a response from the chatbot for a user message."""
         try:
-            result = self.graph.invoke({"messages": [{"role": "user", "content": user_message}]})
-            return result["messages"][-1].content
+            # Get or create conversation for this user
+            conversation, created = Conversation.objects.get_or_create(user=user)
+            
+            # Save user message
+            Message.objects.create(
+                conversation=conversation,
+                role=Message.RoleChoices.USER,
+                content=user_message
+            )
+            
+            # Get conversation history
+            messages = []
+            for msg in conversation.messages.all():
+                messages.append({
+                    "role": msg.role,
+                    "content": msg.content
+                })
+            
+            # Get response from LLM
+            result = self.graph.invoke({"messages": messages})
+            assistant_response = result["messages"][-1].content
+            
+            # Save assistant response
+            Message.objects.create(
+                conversation=conversation,
+                role=Message.RoleChoices.ASSISTANT,
+                content=assistant_response
+            )
+            
+            return assistant_response
         except Exception as e:
             return f"Error: {str(e)}"
     
