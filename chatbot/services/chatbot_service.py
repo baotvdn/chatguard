@@ -34,14 +34,7 @@ class ChatbotService:
 
         # Flow: START -> safety -> (conditional) -> chatbot/END
         self.graph_builder.add_edge(START, "safety")
-        self.graph_builder.add_conditional_edges(
-            "safety",
-            should_continue,
-            {
-                "continue": "chatbot",
-                "end": END
-            }
-        )
+        self.graph_builder.add_conditional_edges("safety", should_continue, {"continue": "chatbot", "end": END})
         self.graph_builder.add_edge("chatbot", END)
 
         self.graph = self.graph_builder.compile()
@@ -78,21 +71,21 @@ class ChatbotService:
         try:
             # Get or create conversation for this user
             conversation, created = Conversation.objects.get_or_create(user=user)
-            
+
             # Get conversation history
             messages = []
             for msg in conversation.messages.all():
                 messages.append({"role": msg.role, "content": msg.content})
-            
+
             # Add the new user message to the list (not saved to DB yet)
             messages.append({"role": "user", "content": user_message})
-            
+
             # Use the graph to process the message (includes safety check)
             result = self.graph.invoke({"messages": messages})
-            
+
             if result.get("messages"):
                 assistant_response = result["messages"][-1].content
-                
+
                 # Stream the response character by character
                 for char in assistant_response:
                     yield char

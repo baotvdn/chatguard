@@ -29,7 +29,7 @@ def safety_agent(state: State, llm) -> dict:
         return state
 
     last_message = messages[-1]
-    
+
     # Only check user messages
     if last_message.type != "human":
         return state
@@ -37,19 +37,19 @@ def safety_agent(state: State, llm) -> dict:
     # Use LLM to assess safety
     safety_check_messages = [
         SystemMessage(content=SAFETY_PROMPT),
-        HumanMessage(content=f"User message to analyze: {last_message.content}")
+        HumanMessage(content=f"User message to analyze: {last_message.content}"),
     ]
 
     try:
         # Get LLM assessment
         response = llm.invoke(safety_check_messages)
         decision = response.content.strip().upper()
-        
-        # Log the decision
-        logger.info(f"Safety decision: {decision} for message: {last_message.content[:100]}...")
 
-        if decision == "REJECT":
-            logger.warning(f"Message rejected by safety agent: {last_message.content[:100]}...")
+        # Log the decision with visual indicators
+        if decision == "ACCEPT":
+            logger.info(f"✅ ACCEPTED: {last_message.content[:100]}...")
+        elif decision == "REJECT":
+            logger.warning(f"🚫 REJECTED: {last_message.content[:100]}...")
             safety_response = "I'm unable to process that request. For your safety and mine, I can only respond to appropriate queries. Please rephrase your question or ask something else I can help with."
             return {"messages": [AIMessage(content=safety_response)]}
 
