@@ -1,14 +1,10 @@
-from typing import Annotated
 from django.conf import settings
 from langchain.chat_models import init_chat_model
-from typing_extensions import TypedDict
-from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
-from .models import Conversation, Message
+from langgraph.graph import END, START, StateGraph
 
-
-class State(TypedDict):
-    messages: Annotated[list, add_messages]
+from chatbot.models import Conversation, Message
+from chatbot.services.agents.domain_agent import domain_agent
+from chatbot.services.state import State
 
 
 class ChatbotService:
@@ -23,13 +19,10 @@ class ChatbotService:
         
         # Build the graph
         self.graph_builder = StateGraph(State)
-        self.graph_builder.add_node("chatbot", self._chatbot_node)
+        self.graph_builder.add_node("chatbot", lambda state: domain_agent(state, self.llm))
         self.graph_builder.add_edge(START, "chatbot")
         self.graph_builder.add_edge("chatbot", END)
         self.graph = self.graph_builder.compile()
-    
-    def _chatbot_node(self, state: State):
-        return {"messages": [self.llm.invoke(state["messages"])]}
     
     def get_response(self, user_message: str, user) -> str:
         """Get a response from the chatbot for a user message."""

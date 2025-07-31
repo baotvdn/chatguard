@@ -1,12 +1,14 @@
-from django.shortcuts import render, redirect
+import json
+
 from django.contrib import messages
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth import login
 from django.http import StreamingHttpResponse
-import json
-from .chatbot_service import get_chatbot
-from .models import Conversation, Message
+from django.shortcuts import redirect, render
+
+from chatbot.models import Conversation, Message
+from chatbot.services.chatbot_service import get_chatbot
 
 
 @login_required
