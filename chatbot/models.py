@@ -16,6 +16,10 @@ class Conversation(TimeStampedModel):
     def __str__(self):
         return f"Conversation {self.id} - {self.created}"
 
+    def get_conversation_history(self):
+        """Get all messages formatted for template display and chatbot processing."""
+        return [{"role": msg.role, "content": msg.content} for msg in self.messages.all()]
+
 
 class Message(TimeStampedModel):
     """Model to store individual messages in conversations."""

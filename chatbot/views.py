@@ -1,6 +1,5 @@
 import json
 
-from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
@@ -14,35 +13,8 @@ from chatbot.services.chatbot_service import get_chatbot
 @login_required
 def chatbot_page(request):
     """Render the chatbot interface with conversation history."""
-    # Get or create conversation for this user
     conversation_obj, _ = Conversation.objects.get_or_create(user=request.user, defaults={"user": request.user})
-
-    # Get all messages for this conversation
-    messages_list = conversation_obj.messages.all()
-    conversation = [{"role": msg.role, "content": msg.content} for msg in messages_list]
-
-    if request.method == "POST":
-        user_message = request.POST.get("message", "").strip()
-
-        if user_message:
-            # Save user message to database
-            Message.objects.create(conversation=conversation_obj, role=Message.RoleChoices.USER, content=user_message)
-
-            try:
-                # Get chatbot response
-                chatbot = get_chatbot()
-                bot_response = chatbot.get_response(user_message, request.user)
-
-                # Save bot response to database
-                Message.objects.create(
-                    conversation=conversation_obj, role=Message.RoleChoices.ASSISTANT, content=bot_response
-                )
-
-            except Exception as e:
-                messages.error(request, f"Error: {str(e)}")
-
-            # Redirect to prevent form resubmission on refresh
-            return redirect("chatbot_page")
+    conversation = conversation_obj.get_conversation_history()
 
     return render(request, "chatbot/index.html", {"conversation": conversation})
 
@@ -50,7 +22,6 @@ def chatbot_page(request):
 @login_required
 def clear_chat(request):
     """Clear the conversation history."""
-    # Delete all messages for this user's conversation
     conversation_obj = Conversation.objects.filter(user=request.user).first()
     if conversation_obj:
         conversation_obj.messages.all().delete()
@@ -60,12 +31,7 @@ def clear_chat(request):
 @login_required
 def stream_chat(request):
     """Stream chatbot response."""
-    if request.method != "POST":
-        return StreamingHttpResponse(json.dumps({"error": "Only POST method allowed"}), content_type="application/json")
-
     user_message = request.POST.get("message", "").strip()
-    if not user_message:
-        return StreamingHttpResponse(json.dumps({"error": "Message is required"}), content_type="application/json")
 
     # Get or create conversation for this user
     conversation_obj, _ = Conversation.objects.get_or_create(user=request.user, defaults={"user": request.user})

@@ -73,9 +73,7 @@ class ChatbotService:
             conversation, created = Conversation.objects.get_or_create(user=user)
 
             # Get conversation history
-            messages = []
-            for msg in conversation.messages.all():
-                messages.append({"role": msg.role, "content": msg.content})
+            messages = conversation.get_conversation_history()
 
             # Add the new user message to the list (not saved to DB yet)
             messages.append({"role": "user", "content": user_message})

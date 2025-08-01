@@ -264,6 +264,14 @@
             return messageDiv;
         }
         
+        // Enable/disable send button based on input content
+        function updateSendButton() {
+            const input = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            const hasContent = input.value.trim().length > 0;
+            sendButton.disabled = !hasContent;
+        }
+        
         // Stream chat response
         function streamChat(userMessage) {
             const loading = document.getElementById('loading');
@@ -279,7 +287,6 @@
             
             // Disable form without showing loading indicator
             sendButton.disabled = true;
-            sendButton.textContent = 'Streaming...';
             scrollToBottom();
             
             // Create assistant message container
@@ -305,7 +312,6 @@
                             // Hide loading and re-enable form
                             loading.style.display = 'none';
                             sendButton.disabled = false;
-                            sendButton.textContent = 'Send';
                             input.focus();
                             return;
                         }
@@ -324,8 +330,8 @@
                                     } else if (data.complete) {
                                         // Stream complete, just re-enable form
                                         sendButton.disabled = false;
-                                        sendButton.textContent = 'Send';
                                         input.focus();
+                                        updateSendButton(); // Update button state based on input content
                                         return;
                                     }
                                 } catch (e) {
@@ -344,7 +350,7 @@
                 console.error('Error streaming chat:', error);
                 assistantMessage.innerHTML = 'Error: Failed to get response';
                 sendButton.disabled = false;
-                sendButton.textContent = 'Send';
+                updateSendButton(); // Update button state based on input content
             });
         }
         
@@ -353,6 +359,14 @@
             
             const form = document.getElementById('chatForm');
             const input = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            
+            // Initial state
+            updateSendButton();
+            
+            // Update on input changes
+            input.addEventListener('input', updateSendButton);
+            input.addEventListener('keyup', updateSendButton);
             
             // Handle form submission with streaming
             form.addEventListener('submit', function(e) {
@@ -362,6 +376,7 @@
                 if (messageValue) {
                     streamChat(messageValue);
                     input.value = ''; // Clear input
+                    updateSendButton(); // Update button state after clearing input
                 }
             });
             
