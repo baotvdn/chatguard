@@ -37,3 +37,47 @@ class Message(TimeStampedModel):
 
     def __str__(self):
         return f"{self.role}: {self.content[:50]}..."
+
+
+class ComplianceStatus(models.IntegerChoices):
+    APPROVED = 1, "Approved"
+    REJECTED = 2, "Rejected"
+
+
+class ViolationType(models.IntegerChoices):
+    JAILBREAK = 1, "Jailbreak"
+    HARMFUL = 2, "Harmful Content"
+    ABUSE = 3, "Abuse"
+
+
+class ComplianceCheck(TimeStampedModel):
+    message = models.ForeignKey(
+        "Message",
+        on_delete=models.CASCADE,
+        related_name="compliance_checks",
+    )
+    status = models.IntegerField(choices=ComplianceStatus.choices, default=ComplianceStatus.APPROVED)
+    violation_type = models.IntegerField(choices=ViolationType.choices, null=True, blank=True)
+    reason = models.TextField(max_length=2000)
+
+    def __str__(self):
+        return f"ComplianceCheck {self.id} - {self.get_status_display()}"
+
+
+class SafetyEvent(TimeStampedModel):
+    class EventType(models.IntegerChoices):
+        QUERY_BLOCKED = 1, "Query Blocked"
+        POLICY_VIOLATION = 2, "Policy Violation"
+        SUSPICIOUS_PATTERN = 3, "Suspicious Pattern"
+
+    event_type = models.IntegerField(choices=EventType.choices)
+    compliance_check = models.ForeignKey(
+        ComplianceCheck,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="safety_events",
+    )
+
+    def __str__(self):
+        return f"SafetyEvent {self.id} - {self.get_event_type_display()}"

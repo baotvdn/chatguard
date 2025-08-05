@@ -39,33 +39,6 @@ class ChatbotService:
 
         self.graph = self.graph_builder.compile()
 
-    def get_response(self, user_message: str, user) -> str:
-        """Get a response from the chatbot for a user message."""
-        try:
-            # Get or create conversation for this user
-            conversation, created = Conversation.objects.get_or_create(user=user)
-
-            # Save user message
-            Message.objects.create(conversation=conversation, role=Message.RoleChoices.USER, content=user_message)
-
-            # Get conversation history
-            messages = []
-            for msg in conversation.messages.all():
-                messages.append({"role": msg.role, "content": msg.content})
-
-            # Get response from LLM
-            result = self.graph.invoke({"messages": messages})
-            assistant_response = result["messages"][-1].content
-
-            # Save assistant response
-            Message.objects.create(
-                conversation=conversation, role=Message.RoleChoices.ASSISTANT, content=assistant_response
-            )
-
-            return assistant_response
-        except Exception as e:
-            return f"Error: {str(e)}"
-
     def stream_response(self, user_message: str, user):
         """Stream a response from the chatbot for a user message."""
         try:
@@ -73,7 +46,9 @@ class ChatbotService:
             conversation, created = Conversation.objects.get_or_create(user=user)
 
             # Save user message
-            Message.objects.create(conversation=conversation, role=Message.RoleChoices.USER, content=user_message)
+            message_obj = Message.objects.create(
+                conversation=conversation, role=Message.RoleChoices.USER, content=user_message
+            )
 
             # Get updated conversation history
             messages = conversation.get_conversation_history()
@@ -81,7 +56,9 @@ class ChatbotService:
             # Accumulate the full response
             full_response = ""
 
-            for message_chunk, metadata in self.graph.stream({"messages": messages}, stream_mode="messages"):
+            for message_chunk, metadata in self.graph.stream(
+                {"messages": messages, "current_message": message_obj}, stream_mode="messages"
+            ):
                 if metadata.get("langgraph_node") == "chatbot" and message_chunk.content:
                     full_response += message_chunk.content
                     yield message_chunk.content
