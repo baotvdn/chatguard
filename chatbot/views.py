@@ -6,7 +6,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.http import StreamingHttpResponse
 from django.shortcuts import redirect, render
 
-from chatbot.models import Conversation, Message
+from chatbot.models import Conversation
 from chatbot.services.chatbot_service import get_chatbot
 
 
@@ -33,26 +33,15 @@ def stream_chat(request):
     """Stream chatbot response."""
     user_message = request.POST.get("message", "").strip()
 
-    # Get or create conversation for this user
-    conversation_obj, _ = Conversation.objects.get_or_create(user=request.user, defaults={"user": request.user})
-
-    # Save user message to database
-    Message.objects.create(conversation=conversation_obj, role=Message.RoleChoices.USER, content=user_message)
-
     def generate():
         chatbot = get_chatbot()
-        full_response = ""
 
-        # Stream the response
+        # Stream the response (message saving is handled inside stream_response)
         for chunk in chatbot.stream_response(user_message, request.user):
-            full_response += chunk
             yield f"data: {json.dumps({'chunk': chunk})}\n\n"
 
-        # Save complete response to database
-        Message.objects.create(conversation=conversation_obj, role=Message.RoleChoices.ASSISTANT, content=full_response)
-
         # Send completion signal
-        yield f"data: {json.dumps({'complete': True, 'full_response': full_response})}\n\n"
+        yield f"data: {json.dumps({'complete': True})}\n\n"
 
     response = StreamingHttpResponse(generate(), content_type="text/event-stream")
     response["Cache-Control"] = "no-cache"

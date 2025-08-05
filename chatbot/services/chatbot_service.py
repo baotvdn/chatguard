@@ -72,23 +72,25 @@ class ChatbotService:
             # Get or create conversation for this user
             conversation, created = Conversation.objects.get_or_create(user=user)
 
-            # Get conversation history
+            # Save user message
+            Message.objects.create(conversation=conversation, role=Message.RoleChoices.USER, content=user_message)
+
+            # Get updated conversation history
             messages = conversation.get_conversation_history()
 
-            # Add the new user message to the list (not saved to DB yet)
-            messages.append({"role": "user", "content": user_message})
+            # Accumulate the full response
+            full_response = ""
 
-            # Use the graph to process the message (includes safety check)
-            result = self.graph.invoke({"messages": messages})
+            for message_chunk, metadata in self.graph.stream({"messages": messages}, stream_mode="messages"):
+                if metadata.get("langgraph_node") == "chatbot" and message_chunk.content:
+                    full_response += message_chunk.content
+                    yield message_chunk.content
 
-            if result.get("messages"):
-                assistant_response = result["messages"][-1].content
-
-                # Stream the response character by character
-                for char in assistant_response:
-                    yield char
-            else:
-                yield "No response generated"
+            # Save the complete assistant response
+            if full_response:
+                Message.objects.create(
+                    conversation=conversation, role=Message.RoleChoices.ASSISTANT, content=full_response
+                )
         except Exception as e:
             yield f"Error: {str(e)}"
 
