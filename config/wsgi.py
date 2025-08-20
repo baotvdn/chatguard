@@ -1,5 +1,5 @@
 """
-WSGI config for klaw_project project.
+WSGI config for chatguard project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 

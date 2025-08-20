@@ -1,7 +1,7 @@
 [project]
-name = "klaw"
+name = "chatguard"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Django chatbot with safety monitoring and compliance tracking"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

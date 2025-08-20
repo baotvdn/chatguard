@@ -1,5 +1,5 @@
 """
-ASGI config for klaw_project project.
+ASGI config for chatguard project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 
