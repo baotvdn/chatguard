@@ -9,6 +9,7 @@ dependencies = [
     "django-extensions>=4.1",
     "langchain[anthropic]>=0.3.26",
     "langgraph>=0.5.4",
+    "langgraph-checkpoint-sqlite>=2.0.11",
     "langsmith>=0.4.8",
     "python-dotenv>=1.1.1",
 ]
