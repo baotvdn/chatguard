@@ -2,8 +2,7 @@ import logging
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from chatbot.models import ComplianceCheck, ComplianceStatus, SafetyEvent, ViolationType
-from chatbot.services.constants import (
+from chatbot.constants import (
     SAFETY_PROMPT,
     SAFETY_REJECTION_MESSAGE,
     SAFETY_STATUS_APPROVE,
@@ -42,38 +41,13 @@ def safety_agent(state: State, llm) -> State:
         response_content = response.content
 
         # Extract XML fields
-        reasoning = extract_xml(response_content, "reasoning") or "No reasoning provided"
         status = (extract_xml(response_content, "status") or SAFETY_STATUS_APPROVE).upper()
-        violation_type_str = (extract_xml(response_content, "violation_type") or "NONE").upper()
 
-        message = state["current_message"]
-
-        # Map violation type string to enum
-        violation_type_map = {
-            "JAILBREAK": ViolationType.JAILBREAK,
-            "HARMFUL": ViolationType.HARMFUL,
-            "ABUSE": ViolationType.ABUSE,
-            "NONE": None,
-        }
-        violation_type = violation_type_map.get(violation_type_str, None)
-
-        # Create compliance check
+        # Simple safety check without compliance tracking for now
         if status == SAFETY_STATUS_APPROVE:
-            ComplianceCheck.objects.create(
-                message=message, status=ComplianceStatus.APPROVED, violation_type=violation_type, reason=reasoning
-            )
             logger.info(f"✅ APPROVED: {last_message.content[:100]}...")
 
         elif status == SAFETY_STATUS_REJECT:
-            compliance_check = ComplianceCheck.objects.create(
-                message=message, status=ComplianceStatus.REJECTED, violation_type=violation_type, reason=reasoning
-            )
-
-            # Create safety event
-            SafetyEvent.objects.create(
-                event_type=SafetyEvent.EventType.QUERY_BLOCKED, compliance_check=compliance_check
-            )
-
             logger.warning(f"🚫 REJECTED: {last_message.content[:100]}...")
             return {"messages": [AIMessage(content=SAFETY_REJECTION_MESSAGE)]}
 

@@ -1,75 +1,33 @@
-from django.conf import settings
-from langchain.chat_models import init_chat_model
-from langgraph.graph import END, START, StateGraph
-
-from chatbot.models import Conversation, Message
-from chatbot.services.agents.domain_agent import domain_agent
-from chatbot.services.agents.safety_agent import safety_agent
-from chatbot.services.state import State
+from chatbot.services.graph_builder import GraphBuilder, LLMFactory
+from chatbot.services.response_streamer import ResponseStreamer
+from chatbot.services.state_manager import StateManager
 
 
 class ChatbotService:
+    """Main chatbot service orchestrating conversation management."""
+
     def __init__(self):
-        # Load API key from Django settings
-        api_key = getattr(settings, "ANTHROPIC_API_KEY", None)
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set in Django settings")
-
-        # Initialize the language model
-        self.llm = init_chat_model("anthropic:claude-3-5-sonnet-latest")
-
-        # Build the graph with safety agent
-        self.graph_builder = StateGraph(State)
-        self.graph_builder.add_node("safety", lambda state: safety_agent(state, self.llm))
-        self.graph_builder.add_node("chatbot", lambda state: domain_agent(state, self.llm))
-
-        # Define a function to check if safety agent blocked the message
-        def should_continue(state):
-            # If the last message is from AI and contains the safety rejection message,
-            # go directly to END
-            messages = state.get("messages", [])
-            if messages and messages[-1].type == "ai":
-                return "end"
-            return "continue"
-
-        # Flow: START -> safety -> (conditional) -> chatbot/END
-        self.graph_builder.add_edge(START, "safety")
-        self.graph_builder.add_conditional_edges("safety", should_continue, {"continue": "chatbot", "end": END})
-        self.graph_builder.add_edge("chatbot", END)
-
-        self.graph = self.graph_builder.compile()
+        # Initialize components
+        self.llm = LLMFactory.create_llm()
+        self.graph = GraphBuilder(self.llm).build_graph()
+        self.state_manager = StateManager(self.graph)
+        self.response_streamer = ResponseStreamer(self.graph, self.state_manager)
 
     def stream_response(self, user_message: str, user):
         """Stream a response from the chatbot for a user message."""
-        try:
-            # Get or create conversation for this user
-            conversation, created = Conversation.objects.get_or_create(user=user)
+        return self.response_streamer.stream_response(user_message, user)
 
-            # Save user message
-            message_obj = Message.objects.create(
-                conversation=conversation, role=Message.RoleChoices.USER, content=user_message
-            )
+    def get_conversation_state(self, user):
+        """Get the current LangGraph state for a user's conversation thread."""
+        return self.state_manager.get_conversation_state(user)
 
-            # Get updated conversation history
-            messages = conversation.get_conversation_history()
+    def get_conversation_history(self, user, limit=None):
+        """Get conversation history from LangGraph state."""
+        return self.state_manager.get_conversation_history(user, limit)
 
-            # Accumulate the full response
-            full_response = ""
-
-            for message_chunk, metadata in self.graph.stream(
-                {"messages": messages, "current_message": message_obj}, stream_mode="messages"
-            ):
-                if metadata.get("langgraph_node") == "chatbot" and message_chunk.content:
-                    full_response += message_chunk.content
-                    yield message_chunk.content
-
-            # Save the complete assistant response
-            if full_response:
-                Message.objects.create(
-                    conversation=conversation, role=Message.RoleChoices.ASSISTANT, content=full_response
-                )
-        except Exception as e:
-            yield f"Error: {str(e)}"
+    def clear_conversation(self, user):
+        """Clear all messages from a user's conversation."""
+        return self.state_manager.clear_conversation(user)
 
 
 # Global chatbot instance (initialized once)
