@@ -9,10 +9,6 @@ wheels/
 # Virtual environments
 .venv
 
-# Django
-db.sqlite3
-*.sqlite3
-
 # Environment variables
 .env
 
@@ -22,4 +18,3 @@ db.sqlite3
 # Project-specific
 CLAUDE.md
 .DS_Store
-chatguard_checkpoints.*

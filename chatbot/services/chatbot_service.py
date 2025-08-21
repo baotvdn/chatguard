@@ -1,4 +1,4 @@
-from chatbot.services.graph_builder import GraphBuilder, LLMFactory
+from chatbot.services.graph_builder import GraphBuilder
 from chatbot.services.response_streamer import ResponseStreamer
 from chatbot.services.state_manager import StateManager
 
@@ -7,9 +7,7 @@ class ChatbotService:
     """Main chatbot service orchestrating conversation management."""
 
     def __init__(self):
-        # Initialize components
-        self.llm = LLMFactory.create_llm()
-        self.graph = GraphBuilder(self.llm).build_graph()
+        self.graph = GraphBuilder().build_graph()
         self.state_manager = StateManager(self.graph)
         self.response_streamer = ResponseStreamer(self.graph, self.state_manager)
 

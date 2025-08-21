@@ -1,7 +1,8 @@
-import sqlite3
-
+import psycopg
+from django.conf import settings
 from langchain.chat_models import init_chat_model
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.store.postgres import PostgresStore
 from langgraph.graph import END, START, StateGraph
 
 from chatbot.services.agents.domain_agent import domain_agent
@@ -12,11 +13,30 @@ from chatbot.services.state import State
 class GraphBuilder:
     """Responsible for building and configuring the LangGraph conversation graph."""
 
-    def __init__(self, llm):
-        self.llm = llm
+    def __init__(self):
+        self.llm = init_chat_model("anthropic:claude-3-5-sonnet-latest")
+        self._graph = None
+        self._store = None
+        self._checkpointer = None
+
+    def _get_store_and_checkpointer(self):
+        """Get or create PostgreSQL store and checkpointer."""
+        if self._store is None or self._checkpointer is None:
+            conn = psycopg.connect(settings.DATABASE_URL, autocommit=True)
+            
+            self._store = PostgresStore(conn)
+            self._store.setup()  # Run migrations
+            
+            self._checkpointer = PostgresSaver(conn)
+            self._checkpointer.setup()  # Create tables
+            
+        return self._store, self._checkpointer
 
     def build_graph(self):
         """Build the complete conversation graph with safety and domain agents."""
+        if self._graph is not None:
+            return self._graph
+            
         graph_builder = StateGraph(State)
         
         # Add nodes
@@ -36,23 +56,13 @@ class GraphBuilder:
         graph_builder.add_conditional_edges("safety", should_continue, {"continue": "chatbot", "end": END})
         graph_builder.add_edge("chatbot", END)
 
-        # Add checkpointer for state persistence
-        conn = sqlite3.connect("chatguard_checkpoints.sqlite", check_same_thread=False)
-        checkpointer = SqliteSaver(conn)
-
-        return graph_builder.compile(checkpointer=checkpointer)
-
-
-class LLMFactory:
-    """Factory for creating and configuring language models."""
-
-    @staticmethod
-    def create_llm():
-        """Create and configure the language model."""
-        from django.conf import settings
+        # Get store and checkpointer
+        store, checkpointer = self._get_store_and_checkpointer()
         
-        api_key = getattr(settings, "ANTHROPIC_API_KEY", None)
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set in Django settings")
-        
-        return init_chat_model("anthropic:claude-3-5-sonnet-latest")
+        # Compile with both checkpointer and store
+        self._graph = graph_builder.compile(
+            checkpointer=checkpointer,
+            store=store
+        )
+            
+        return self._graph
